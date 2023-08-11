@@ -1,7 +1,10 @@
-__version___ = "0.1.0"
+__version___ = "0.1.3"
 
 from zen_custom import loggify, threaded
 from enum import Enum
+
+
+DEFAULT_IP_SETTINGS = {'ipv4_servers': True, 'ipv6_servers': True, 'block_ipv6': False}
 
 
 class DNSCryptStampType(Enum):
@@ -49,9 +52,9 @@ class BaseStamp:
         stamp_type = cls.determine_stamp_type(decoded_data)
         return super().__new__(getattr(import_module(f"stamps.{stamp_type.lower()}"), stamp_type))
 
-    def __init__(self, sdns=None, resolve=True, ipv6=True, *args, **kwargs):
-        self.ipv6 = ipv6
+    def __init__(self, sdns=None, resolve=True, ip_settings=DEFAULT_IP_SETTINGS, *args, **kwargs):
         self.resolve = resolve
+        self.ip_settings = ip_settings
         for option in DNSCryptStampOption:
             setattr(self, option.name.lower(), kwargs.get(option.name.lower(), False))  # Set the option attributes, defaulting to False
 
@@ -109,6 +112,9 @@ class BaseStamp:
         """
         Parse an IPv6 address
         """
+        if not self.ip_settings['ipv6_servers'] or self.ip_settings['block_ipv6']:
+            raise ValueError("IPv6 servers are disabled")
+
         from ipaddress import IPv6Address, AddressValueError
         address, port = address[1:].split(']')  # Remove the leading [ and split the port
 
@@ -126,6 +132,9 @@ class BaseStamp:
         """
         Parse an IPv4 address
         """
+        if not self.ip_settings['ipv4_servers']:
+            raise ValueError("IPv4 servers are disabled")
+
         from ipaddress import IPv4Address, AddressValueError
 
         try:
@@ -154,12 +163,17 @@ class BaseStamp:
         """
         from socket import getaddrinfo, AF_INET, AF_INET6, SOCK_STREAM, gaierror
 
-        addr_family = AF_INET6 if self.ipv6 else AF_INET
+        if self.ip_settings['ipv6_servers']:
+            addr_family = AF_INET6
+        elif self.ip_settings['ipv4_servers']:
+            addr_family = AF_INET
+        else:
+            raise ValueError("No IP versions are enabled")
 
         try:
             address_info = getaddrinfo(address, self.port, addr_family, SOCK_STREAM)
         except gaierror as e:
-            if self.ipv6:
+            if addr_family == AF_INET6 and self.ip_settings['ipv4_servers']:
                 self.logger.warning("Could not resolve IPv6 address %s: %s", address, e)
                 self.logger.info("Trying to resolve IPv4 address")
                 address_info = getaddrinfo(address, self.port, AF_INET, SOCK_STREAM)
@@ -173,12 +187,18 @@ class BaseStamp:
         """
         Consumes a length-value pair and sets the address and port attributes
         """
+        if not self.ip_settings['ipv4_servers'] and not self.ip_settings['ipv6_servers']:
+            raise ValueError("No IP versions are enabled")
+
         address = self.consume_lp()
         if address.startswith('[') and ']' in address:
-            if self.ipv6:
+            if self.ip_settings['block_ipv6']:
+                raise ValueError("IPv6 servers are blocked")
+            elif self.ip_settings['ipv6_servers']:
                 self._parse_ipv6_address(address)
             else:
-                raise ValueError("IPv6 address %s not allowed" % address)
+                self.logger.warning("IPv6 servers are disabled, but IPv6 address %s was found", address)
+                raise ValueError("IPv6 servers are disabled")
         else:
             self._parse_ipv4_address(address)
 
@@ -205,6 +225,8 @@ class BaseStamp:
         self.logger.debug("Consumable data: %s", self.consumable_data)
 
         self.parse_consumable_data()
+        if self.consumable_data:
+            self.logger.warning("Consumable data remains after parsing: %s", self.consumable_data)
 
     def parse_consumable_data(self):
         """

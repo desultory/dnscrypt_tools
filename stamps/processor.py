@@ -1,4 +1,4 @@
-__version__ = '0.1.0'
+__version__ = '0.1.2'
 
 
 from zen_custom import loggify
@@ -7,9 +7,8 @@ from stamps.snatcher import Snatcher
 
 @loggify
 class Processor:
-    def __init__(self, snatcher=None, ipv6=True, autofetch=True, *args, **kwargs):
-        self.ipv6 = ipv6
-        self.snatcher = snatcher or Snatcher(logger=self.logger, ipv6=self.ipv6)
+    def __init__(self, snatcher=None, autofetch=True, *args, **kwargs):
+        self.snatcher = snatcher or Snatcher(logger=self.logger)
 
         if autofetch:
             self.snatcher.fetch()

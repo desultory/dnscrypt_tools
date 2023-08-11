@@ -1,4 +1,4 @@
-__version__ = '0.1.0'
+__version__ = '0.1.3'
 
 from zen_custom import loggify
 from stamps.base import BaseStamp
@@ -6,11 +6,12 @@ from stamps.base import BaseStamp
 
 @loggify
 class Snatcher:
-    def __init__(self, dnscrypt_config='dnscrypt-proxy.toml', source_dir='resolver_sources', ipv6=True, *args, **kwargs):
+    ip_settings = ['ipv4_servers', 'ipv6_servers', 'block_ipv6']
+
+    def __init__(self, dnscrypt_config='dnscrypt-proxy.toml', source_dir='resolver_sources', *args, **kwargs):
         self.dnscrypt_config_file = dnscrypt_config
         self.source_dir = source_dir
         self.sources = {}
-        self.ipv6 = ipv6
 
         self.load_config()
 
@@ -22,6 +23,17 @@ class Snatcher:
         with open(self.dnscrypt_config_file, 'rb') as f:
             self.config = load(f)
         self.logger.info("Loaded config file: %s", self.dnscrypt_config_file)
+
+        ip_settings = {}
+
+        for field in self.ip_settings:
+            ip_settings[field] = self.config[field]
+
+        if not ip_settings['ipv4_servers'] and not ip_settings['ipv6_servers']:
+            self.logger.error("Either IPv4 or IPv6 servers must be enabled in the config file")
+            raise ValueError("All IP versions are disabled in the config file")
+
+        self.ip_settings = ip_settings
 
     def _check_source_dir(self):
         """
@@ -97,7 +109,7 @@ class Snatcher:
             for line in data['content']:
                 if line.startswith('sdns://'):
                     try:
-                        stamp = BaseStamp(line, logger=self.logger, ipv6=self.ipv6)
+                        stamp = BaseStamp(line, logger=self.logger, ip_settings=self.ip_settings)
                     except Exception as e:
                         self.logger.error("Failed to process stamp, exception '%s', line: %s" % (e, line))
                         continue
