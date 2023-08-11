@@ -136,7 +136,7 @@ class BaseStamp:
             self.port = self.default_port
 
         try:
-            self.address.add(str(IPv6Address(address)))
+            self.address.add(IPv6Address(address))
         except AddressValueError:
             raise ValueError("Invalid IPv6 address: %s" % address)
 
@@ -161,7 +161,7 @@ class BaseStamp:
                 self.port = self.default_port
 
         try:
-            self.address.add(str(IPv4Address(address)))
+            self.address.add(IPv4Address(address))
         except AddressValueError:
             if self.resolve:
                 self.resolve_address(address)
