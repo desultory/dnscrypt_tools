@@ -9,4 +9,4 @@ if __name__ == '__main__':
 
     processor = Processor(logger=logger)
 
-    print(processor.get_all_ips())
+    print(processor.generate_nftables_sets())

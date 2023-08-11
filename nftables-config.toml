@@ -1,0 +1,11 @@
+
+dnscrypt_table = "filter"
+dnscrypt_table_type = "inet"
+dnscrypt_chain_name = "dnscrypt_filter"
+dnscrypt_hook_chain = "forward_hook"
+dnscrypt_source_chain = "dnscrypt_sources"  # _ipv4 and _ipv6 will be appended
+dnscrypt_port_chain = "dnscrypt_ports"  # All ports are grouped here
+dnscrypt_proxy_clients = [ "10.53.53.2" ]  # IP of the proxy, so it can jump to the dnscrypt chain
+nat_chain_type = "inet"
+nat_chain_name = "nat"
+nat_set_name = "nat_nets"
