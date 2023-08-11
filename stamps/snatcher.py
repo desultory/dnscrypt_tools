@@ -109,11 +109,11 @@ class Snatcher:
             for line in data['content']:
                 if line.startswith('sdns://'):
                     try:
-                        stamp = BaseStamp(line, logger=self.logger, ip_settings=self.ip_settings)
+                        stamp = BaseStamp(line, _log_init=False, logger=self.logger, ip_settings=self.ip_settings)
                     except Exception as e:
                         self.logger.error("Failed to process stamp, exception '%s', line: %s" % (e, line))
                         continue
-                    self.logger.info("Found stamp: %s", stamp)
+                    self.logger.info("Found stamp:\n%s", stamp)
                     self.sources[source]['stamps'].append(stamp)
         for thread, exception in BaseStamp._threads:
             while not exception.empty():

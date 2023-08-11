@@ -1,4 +1,4 @@
-__version___ = "0.1.3"
+__version___ = "0.1.4"
 
 from zen_custom import loggify, threaded
 from enum import Enum
@@ -77,7 +77,7 @@ class BaseStamp:
             if self.has_props:
                 self.parse_options()
             else:
-                self.logger.info("Stamp type %s does not have options", self.__class__.__name__)
+                self.logger.debug("Stamp type %s does not have options", self.__class__.__name__)
             self.parse_sdns()
 
     @classmethod
@@ -231,7 +231,7 @@ class BaseStamp:
         """
         Parse the sdns field
         """
-        self.logger.info("Parsing sdns field: %s", self.sdns)
+        self.logger.debug("Parsing sdns field: %s", self.sdns)
         offset = 9 if self.has_props else 1
         self.consumable_data = self.sdns[offset:]  # Remove the header and options
         self.logger.debug("Consumable data: %s", self.consumable_data)
