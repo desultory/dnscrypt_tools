@@ -13,3 +13,4 @@ nat_chain_name = "nat"  # NAT chain name
 nat_set_name = "nat_nets"  # The name of the set which contains the networks to NAT
 
 dnscrypt_nftables_rulefile = 'dnscrypt.rules'  # File to write the rules to
+dnscrypt_config_file = 'dnscrypt-proxy.toml'  # File to read the config from

@@ -1,4 +1,4 @@
-__version__ = '0.2.5'
+__version__ = '0.3.0'
 
 
 from zen_custom import loggify
@@ -7,15 +7,27 @@ from stamps.snatcher import Snatcher
 
 @loggify
 class Processor:
+    """
+    Processes the data from the snatcher and generates nftables rules.
+    """
+
     required_config_keys = ['dnscrypt_table', 'dnscrypt_table_type', 'dnscrypt_chain_name', 'dnscrypt_hook_chain', 'dnscrypt_source_chain', 'dnscrypt_port_chain', 'dnscrypt_proxy_clients']
-    optional_config_keys = ['nat_chain_type', 'nat_chain_name', 'nat_set_name', 'dnscrypt_nftables_rulefile']
+    optional_config_keys = ['nat_chain_type', 'nat_chain_name', 'nat_set_name', 'dnscrypt_nftables_rulefile', 'dnscrypt_config_file']
 
     def __init__(self, snatcher=None, autofetch=True, config_file='config.toml', print_output=False, *args, **kwargs):
-        self.snatcher = snatcher or Snatcher(logger=self.logger)
         self.config_file = config_file
         self.print_output = print_output
 
         self.load_config()
+
+        if isinstance(snatcher, Snatcher):
+            self.logger.info('Using provided snatcher')
+            self.snatcher = snatcher
+        else:
+            kwargs = {'logger': self.logger}
+            if self.dnscrypt_config_file:
+                kwargs['dnscrypt_config'] = self.dnscrypt_config_file
+            self.snatcher = Snatcher(**kwargs)
 
         if autofetch:
             self.snatcher.fetch()
@@ -106,7 +118,7 @@ class Processor:
         # Add bootstrap servers
         for bootstrap_resolver in self.snatcher.config['bootstrap_resolvers']:
             resolver_ip, resolver_port = bootstrap_resolver.split(':')
-            out_str += f"    ip daddr {resolver_ip} udp dport {resolver_port} counter accept\n"
+            out_str += f'    ip daddr {resolver_ip} udp dport {resolver_port} counter accept comment "Bootstrap resolver"\n'
         out_str += "  }\n"
         # Add it to the appropriate hook
         out_str += f"  chain {self.dnscrypt_hook_chain} {{\n"
@@ -183,6 +195,9 @@ class Processor:
         return ports
 
     def iterate_stamps(self):
+        """
+        Iterates over all stamps in the snatcher.
+        """
         for source in self.snatcher.sources.values():
             for stamp in source['stamps']:
                 yield stamp

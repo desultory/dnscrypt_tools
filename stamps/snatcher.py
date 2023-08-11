@@ -6,6 +6,10 @@ from stamps.base import BaseStamp
 
 @loggify
 class Snatcher:
+    """
+    Does partial parsing of a dnscrypt-proxy.toml file and fetches the latest resolver list from the sources
+    """
+
     ip_settings = ['ipv4_servers', 'ipv6_servers', 'block_ipv6']
 
     def __init__(self, dnscrypt_config='dnscrypt-proxy.toml', source_dir='resolver_sources', *args, **kwargs):
