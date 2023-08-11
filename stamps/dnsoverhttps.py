@@ -1,4 +1,4 @@
-__version__ = "0.2.0"
+__version__ = "0.2.2"
 
 from stamps.base import BaseStamp
 
@@ -14,6 +14,3 @@ class DNSOverHTTPS(BaseStamp):
         self.hashes = self.consume_vlp(decode=False)
         self.parse_address()
         self.path = self.consume_lp()
-
-        if self.consumable_data:
-            self.logger.warning("Unconsumed data: %s", self.consumable_data)

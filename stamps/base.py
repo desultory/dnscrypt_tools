@@ -32,6 +32,18 @@ class DNSCryptStampOption(Enum):
 
 @loggify
 class BaseStamp:
+    """
+    Base class representing a DNSCrypt stamp
+    has_props determines whether or not stamps will have options, they are skipped otherwise
+    The bsae parameters are shared between all stamps currently
+    Additional parameters can be defined if making a subclass.
+
+    Based on the StampType enum, the stamp type is determined and the appropriate class is returned
+    The file should be the name of the stamp type, in lowercase
+
+    ip_settings is a dictionary of settings for resolving addresses, like DEFAULT_IP_SETTINGS.
+    When used with the snatcher, this config will be read from the dnscrypt-proxy.toml file
+    """
     has_props = True
     default_port = 443
 

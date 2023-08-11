@@ -1,4 +1,4 @@
-__version__ = '0.2.0'
+__version__ = '0.2.2'
 
 from stamps.base import BaseStamp
 
@@ -8,7 +8,3 @@ class AnonymizedDNSCrypt(BaseStamp):
 
     def parse_consumable_data(self):
         self.parse_address()
-
-        if self.consumable_data:
-            self.logger.warning("Unconsumed data: %s", self.consumable_data)
-
