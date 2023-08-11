@@ -6,6 +6,10 @@ dnscrypt_hook_chain = "forward_hook"
 dnscrypt_source_chain = "dnscrypt_sources"  # _ipv4 and _ipv6 will be appended
 dnscrypt_port_chain = "dnscrypt_ports"  # All ports are grouped here
 dnscrypt_proxy_clients = [ "10.53.53.2" ]  # IP of the proxy, so it can jump to the dnscrypt chain
-nat_chain_type = "inet"
-nat_chain_name = "nat"
-nat_set_name = "nat_nets"
+# Optional
+nat_chain_type = "inet"  # NAT chain type
+nat_chain_name = "nat"  # NAT chain name
+# !! This expects the nat chain to already be defined and configured
+nat_set_name = "nat_nets"  # The name of the set which contains the networks to NAT
+
+dnscrypt_nftables_rulefile = 'dnscrypt.rules'  # File to write the rules to

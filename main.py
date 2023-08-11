@@ -5,8 +5,7 @@ import logging
 
 if __name__ == '__main__':
     logger = logging.getLogger()
-    logger.setLevel(logging.DEBUG)
+    logger.setLevel(logging.INFO)
 
     processor = Processor(logger=logger)
-
-    print(processor.generate_nftables_sets())
+    processor.generate_nftables_sets()

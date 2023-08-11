@@ -1,4 +1,4 @@
-__version__ = '0.2.4'
+__version__ = '0.2.5'
 
 
 from zen_custom import loggify
@@ -8,11 +8,12 @@ from stamps.snatcher import Snatcher
 @loggify
 class Processor:
     required_config_keys = ['dnscrypt_table', 'dnscrypt_table_type', 'dnscrypt_chain_name', 'dnscrypt_hook_chain', 'dnscrypt_source_chain', 'dnscrypt_port_chain', 'dnscrypt_proxy_clients']
-    optional_config_keys = ['nat_chain_type', 'nat_chain_name', 'nat_set_name']
+    optional_config_keys = ['nat_chain_type', 'nat_chain_name', 'nat_set_name', 'dnscrypt_nftables_rulefile']
 
-    def __init__(self, snatcher=None, autofetch=True, config_file='nftables-config.toml', *args, **kwargs):
+    def __init__(self, snatcher=None, autofetch=True, config_file='config.toml', print_output=False, *args, **kwargs):
         self.snatcher = snatcher or Snatcher(logger=self.logger)
         self.config_file = config_file
+        self.print_output = print_output
 
         self.load_config()
 
@@ -127,7 +128,14 @@ class Processor:
             out_str += "  }\n"
             out_str += "}\n"
 
-        return out_str
+        if self.print_output:
+            print(out_str)
+
+        if self.dnscrypt_nftables_rulefile is not None:
+            with open(self.dnscrypt_nftables_rulefile, 'w') as f:
+                f.write(out_str)
+        else:
+            self.logger.info('No rulefile specified, not writing to file')
 
     def _get_all_ips(self):
         """
