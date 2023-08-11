@@ -1,4 +1,4 @@
-__version__ = '0.1.4'
+__version__ = '0.1.5'
 
 from zen_custom import loggify, threaded
 from stamps.base import BaseStamp
@@ -35,16 +35,6 @@ class Snatcher:
 
         self.ip_settings = ip_settings
 
-    def _check_source_dir(self):
-        """
-        Checks if the source directory exists, if not, creates it.
-        """
-        from os.path import exists
-        from os import mkdir
-        if not exists(self.source_dir):
-            mkdir(self.source_dir)
-            self.logger.info("Created source directory: %s", self.source_dir)
-
     @threaded
     def get_source(self, url, fresh=False):
         """
@@ -79,7 +69,6 @@ class Snatcher:
         """
         Fetches the latest resolver list from the sources
         """
-        self._check_source_dir()
         for source, data in self.config['sources'].items():
             for url in data['urls']:
                 self.get_source(url, fresh=fresh)
