@@ -9,6 +9,4 @@ if __name__ == '__main__':
 
     processor = Processor(logger=logger)
 
-    ip_str = "{ " + ', '.join([str(ip) for ip in processor.get_all_ips()]) + " }"
-
-    print(ip_str)
+    print(processor.get_all_ips())

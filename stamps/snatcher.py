@@ -1,6 +1,6 @@
-__version__ = '0.1.3'
+__version__ = '0.1.4'
 
-from zen_custom import loggify
+from zen_custom import loggify, threaded
 from stamps.base import BaseStamp
 
 
@@ -45,20 +45,11 @@ class Snatcher:
             mkdir(self.source_dir)
             self.logger.info("Created source directory: %s", self.source_dir)
 
-    def read_source(self, filename):
-        """
-        Reads a source file and adds it to the list of sources
-        """
-        self.logger.info("Reading source file: %s", filename)
-        with open(filename, 'r') as f:
-            self.sources[filename] = {}
-            self.sources[filename]['content'] = f.readlines()
-
+    @threaded
     def get_source(self, url, fresh=False):
         """
         Gets a source from the specified url
         """
-        from os.path import exists
         from urllib import request
         from urllib.error import URLError
 
@@ -66,15 +57,13 @@ class Snatcher:
             self.logger.error("Source must be a .md file")
             return
 
-        filename = f"{self.source_dir}/{url.split('/')[2]}-{ url.split('/')[-1]}"
-        if exists(filename):
-            self.logger.warning("Source already exists: %s", filename)
-            if not fresh:
-                return self.read_source(filename)
+        source_name = f"{self.source_dir}/{url.split('/')[2]}-{ url.split('/')[-1]}"
 
         try:
             self.logger.info("Fetching source: %s", url)
             response = request.urlopen(url)
+            source_ip = response.fp.raw._sock.getpeername()[0]
+            self.logger.warning("Source IP: %s", source_ip)
         except URLError as e:
             self.logger.error("Failed to fetch source: %s", e.reason)
             return
@@ -82,12 +71,9 @@ class Snatcher:
         raw_content = response.read().decode('utf-8').splitlines()
         content = [line for line in raw_content if line.strip()]
 
-        with open(filename, 'w') as f:
-            f.write('\n'.join(content))
-            self.logger.info("Wrote source to file: %s", filename)
-
-        self.sources[filename] = {}
-        self.sources[filename]['content'] = content
+        self.sources[source_name] = {}
+        self.sources[source_name]['source_ip'] = source_ip
+        self.sources[source_name]['content'] = content
 
     def fetch(self, fresh=False):
         """
@@ -97,6 +83,13 @@ class Snatcher:
         for source, data in self.config['sources'].items():
             for url in data['urls']:
                 self.get_source(url, fresh=fresh)
+
+        for thread, exception in self._threads:
+            while not exception.empty():
+                e = exception.get()
+                self.logger.exception("Exception occured while fetching sources: %s", e)
+            thread.join()
+
         self.process_stamps()
 
     def process_stamps(self):
@@ -118,6 +111,6 @@ class Snatcher:
         for thread, exception in BaseStamp._threads:
             while not exception.empty():
                 e = exception.get()
-                self.logger.error("Exception in thread: %s", e)
+                self.logger.exception("Exception occured while processing stamps: %s", e)
             thread.join()
 

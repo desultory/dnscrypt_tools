@@ -1,4 +1,4 @@
-__version__ = '0.1.2'
+__version__ = '0.1.3'
 
 
 from zen_custom import loggify
@@ -14,10 +14,30 @@ class Processor:
             self.snatcher.fetch()
 
     def get_all_ips(self):
-        ips = set()
+        """
+        Iterates over all stamps and sources in the snatcher.
+        Returns 3 sets, the first containing source ips, the second containing ipv4 ips and the third containing ipv6 ips.
+        """
+        from ipaddress import IPv4Address, IPv6Address
+        source_ips = set()
+        ipv4_ips = set()
+        ipv6_ips = set()
+
+        for source in self.snatcher.sources.values():
+            source_ips.add(source['source_ip'])
+
         for stamp in self.iterate_stamps():
-            ips = ips | stamp.address
-        return ips
+            if not isinstance(stamp.address, set):
+                raise TypeError(f'Address is not a set: {stamp.address}')
+            for address in stamp.address:
+                if isinstance(address, IPv4Address):
+                    ipv4_ips.add(address)
+                elif isinstance(address, IPv6Address):
+                    ipv6_ips.add(address)
+                else:
+                    self.logger.error("Unknown address type for address: %s", address)
+                    raise TypeError(f'Unknown address type: {type(address)}')
+        return source_ips, ipv4_ips, ipv6_ips
 
     def iterate_stamps(self):
         for source in self.snatcher.sources.values():

@@ -182,18 +182,25 @@ class BaseStamp:
         else:
             raise ValueError("No IP versions are enabled")
 
+        self.logger.info("Resolving address %s", address)
         try:
             address_info = getaddrinfo(address, self.port, addr_family, SOCK_STREAM)
+            self.logger.debug("Resolved address %s to %s", address, address_info)
         except gaierror as e:
             if addr_family == AF_INET6 and self.ip_settings['ipv4_servers']:
                 self.logger.warning("Could not resolve IPv6 address %s: %s", address, e)
-                self.logger.info("Trying to resolve IPv4 address")
                 address_info = getaddrinfo(address, self.port, AF_INET, SOCK_STREAM)
             else:
                 raise ValueError("Could not resolve IPv4 address %s: %s" % (address, e))
 
         for address in address_info:
-            self.address.add(address[4][0])
+            self.logger.debug("Processing resolved address %s", address)
+            if self.ip_settings['ipv6_servers'] and address[0] == AF_INET6:
+                self._parse_ipv6_address(f"[{address[4][0]}]")  # Wrap the address in []
+            elif self.ip_settings['ipv4_servers'] and address[0] == AF_INET:
+                self._parse_ipv4_address(address[4][0])
+            else:
+                raise ValueError("Address does not match the enabled IP versions: %s" % address[4][0])
 
     def parse_address(self):
         """
