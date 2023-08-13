@@ -1,7 +1,7 @@
 __version__ = '0.2.1'
 
 from zen_custom import loggify, threaded
-from stamps.base import BaseStamp, DisabledStampType
+from stamps.base import BaseStamp, DisabledStampType, BrokenStampError
 
 
 @loggify
@@ -106,6 +106,9 @@ class Snatcher:
                         stamp = BaseStamp(line, source_settings=self.source_settings, _log_init=False, logger=self.logger, ip_settings=self.ip_settings)
                     except DisabledStampType as e:
                         self.logger.info("Skipping stamp, disabled stamp type: %s", e)
+                        continue
+                    except BrokenStampError as e:
+                        self.logger.info("Skipping stamp, broken stamp: %s", e)
                         continue
                     self.sources[source]['stamps'].append(stamp)
 

@@ -1,4 +1,4 @@
-__version___ = "0.2.1"
+__version___ = "0.2.2"
 
 from zen_custom import loggify, threaded
 from enum import Enum
@@ -34,6 +34,13 @@ class DNSCryptStampOption(Enum):
 class DisabledStampType(Exception):
     """
     Exception for when a stamp type is disabled
+    """
+    pass
+
+
+class BrokenStampError(Exception):
+    """
+    Exception for when a stamp is broken
     """
     pass
 
@@ -133,7 +140,7 @@ class BaseStamp:
         for stamp_type in DNSCryptStampType:
             if stamp_type.value[0] == header_value:
                 return stamp_type
-        raise ValueError("Invalid stamp type: %s" % header_value)
+        raise BrokenStampError("Invalid stamp type: %s" % header_value)
 
     def _parse_ipv6_address(self, address):
         """
@@ -192,12 +199,15 @@ class BaseStamp:
 
         if family not in (AF_INET, AF_INET6):
             raise ValueError("Invalid address family: %s" % family)
+        if family == AF_INET6 and (not self.ip_settings['ipv6_servers'] or self.ip_settings['block_ipv6']):
+            self.logger.warning("IPv6 servers are disabled, not resolving %s address: %s" % (family.name, address))
+            return
 
         self.logger.info("Resolving %s address: %s" % (family.name, address))
 
         try:
             address_info = getaddrinfo(address, self.port, family, SOCK_STREAM)
-            self.logger.debug("Resolved '%s' address %s to %s" % (AF_INET, address, address_info))
+            self.logger.debug("Resolved '%s' address %s to %s" % (family.name, address, address_info))
         except gaierror as e:
             self.logger.error("Failed to resolve %s address %s: %s" % (family.name, address, e))
             return
@@ -222,9 +232,6 @@ class BaseStamp:
         if self.ip_settings['ipv6_servers']:
             self._resolve_address(address, AF_INET6)
 
-        if len(self.ipv4_servers) > 1 and len(self.ipv6_servers) > 1:
-            print(self)
-
         for thread, exception in self._threads:
             while not exception.empty():
                 e = exception.get()
@@ -241,12 +248,9 @@ class BaseStamp:
         # First try to parse the address as an IPv6 address
         if address.startswith('[') and ']' in address:
             if self.ip_settings['block_ipv6']:
-                raise ValueError("IPv6 servers are blocked")
+                self.logger.warning("IPv6 servers are blocked, but IPv6 address %s was found", address)
             elif self.ip_settings['ipv6_servers']:
                 self._parse_ipv6_address(address)
-            else:
-                self.logger.warning("IPv6 servers are disabled, but IPv6 address %s was found", address)
-                raise ValueError("IPv6 servers are disabled")
         # Then try to parse the address as an IPv4 address, where it will try to resolve the address if it is not valid
         else:
             self._parse_ipv4_address(address)
@@ -276,6 +280,9 @@ class BaseStamp:
         self.parse_consumable_data()
         if self.consumable_data:
             self.logger.warning("Consumable data remains after parsing: %s", self.consumable_data)
+
+        if len(self.ipv4_servers | self.ipv6_servers) == 0:
+            raise BrokenStampError("No servers were found")
 
     def parse_consumable_data(self):
         """
