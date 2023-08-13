@@ -1,4 +1,4 @@
-__version__ = '0.2.0'
+__version__ = '0.2.1'
 
 from zen_custom import loggify, threaded
 from stamps.base import BaseStamp, DisabledStampType
@@ -62,9 +62,10 @@ class Snatcher:
         source_name = f"{self.source_dir}/{url.split('/')[2]}-{ url.split('/')[-1]}"
 
         try:
-            self.logger.info("Fetching source: %s", url)
+            self.logger.debug("Fetching source: %s", url)
             response = request.urlopen(url)
             source_ip = response.fp.raw._sock.getpeername()[0]
+            self.logger.info("Fetched source '%s' from IP: %s", url, source_ip)
         except URLError as e:
             self.logger.error("Failed to fetch source '%s': %s" % (url, e.reason))
             return
@@ -106,7 +107,6 @@ class Snatcher:
                     except DisabledStampType as e:
                         self.logger.info("Skipping stamp, disabled stamp type: %s", e)
                         continue
-                    self.logger.info("Found stamp:\n%s", stamp)
                     self.sources[source]['stamps'].append(stamp)
 
         for thread, exception in BaseStamp._threads:

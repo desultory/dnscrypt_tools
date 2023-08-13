@@ -193,11 +193,11 @@ class BaseStamp:
         if family not in (AF_INET, AF_INET6):
             raise ValueError("Invalid address family: %s" % family)
 
-        self.logger.info("Resolving %s address %s" % (family.name, address))
+        self.logger.info("Resolving %s address: %s" % (family.name, address))
 
         try:
             address_info = getaddrinfo(address, self.port, family, SOCK_STREAM)
-            self.logger.debug("Resolved %s address %s to %s" % (AF_INET, address, address_info))
+            self.logger.debug("Resolved '%s' address %s to %s" % (AF_INET, address, address_info))
         except gaierror as e:
             self.logger.error("Failed to resolve %s address %s: %s" % (family.name, address, e))
             return
@@ -221,6 +221,9 @@ class BaseStamp:
 
         if self.ip_settings['ipv6_servers']:
             self._resolve_address(address, AF_INET6)
+
+        if len(self.ipv4_servers) > 1 and len(self.ipv6_servers) > 1:
+            print(self)
 
         for thread, exception in self._threads:
             while not exception.empty():
@@ -348,15 +351,11 @@ class BaseStamp:
         parameters = self.base_parameters + self.additional_parameters
 
         for parameter in parameters:
-            if hasattr(self, parameter):
-                if isinstance(getattr(self, parameter), set) or isinstance(getattr(self, parameter), list):
-                    if len(getattr(self, parameter)) == 0:
-                        self.logger.debug("Skipping empty parameter: %s", parameter)
-                        continue
-                    out_str += "  %s: %s\n" % (parameter, ', '.join([str(item) for item in getattr(self, parameter)]))
+            if value := getattr(self, parameter):
+                if isinstance(value, set) or isinstance(value, list) and len(value) > 0:
+                    out_str += "  %s: %s\n" % (parameter, ', '.join([str(item) for item in value]))
                 else:
-                    out_str += "  %s: %s\n" % (parameter, getattr(self, parameter))
-            self.logger.debug("Parameter %s not found", parameter)
+                    out_str += "  %s: %s\n" % (parameter, value)
 
         return out_str
 

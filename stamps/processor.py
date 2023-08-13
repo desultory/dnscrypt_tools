@@ -193,3 +193,7 @@ class Processor:
         for source in self.snatcher.sources.values():
             for stamp in source['stamps']:
                 yield stamp
+
+    def __str__(self):
+        return ''.join([str(stamp) for stamp in self.iterate_stamps()])
+
