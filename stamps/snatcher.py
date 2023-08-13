@@ -1,7 +1,7 @@
-__version__ = '0.1.8'
+__version__ = '0.2.0'
 
 from zen_custom import loggify, threaded
-from stamps.base import BaseStamp, ResolutionError, DisabledStampType
+from stamps.base import BaseStamp, DisabledStampType
 
 
 @loggify
@@ -108,6 +108,7 @@ class Snatcher:
                         continue
                     self.logger.info("Found stamp:\n%s", stamp)
                     self.sources[source]['stamps'].append(stamp)
+
         for thread, exception in BaseStamp._threads:
             while not exception.empty():
                 e = exception.get()

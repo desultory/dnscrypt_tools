@@ -1,4 +1,4 @@
-__version___ = "0.1.7"
+__version___ = "0.2.1"
 
 from zen_custom import loggify, threaded
 from enum import Enum
@@ -34,13 +34,6 @@ class DNSCryptStampOption(Enum):
 class DisabledStampType(Exception):
     """
     Exception for when a stamp type is disabled
-    """
-    pass
-
-
-class ResolutionError(Exception):
-    """
-    Exception for when a stamp cannot be resolved
     """
     pass
 
@@ -190,19 +183,24 @@ class BaseStamp:
             else:
                 raise ValueError("Invalid IPv4 address: %s" % address)
 
+    @threaded
     def _resolve_address(self, address, family):
         """
         Resolve an IP address
         """
-        from socket import getaddrinfo, AF_INET, AF_INET6, SOCK_STREAM
+        from socket import getaddrinfo, AF_INET, AF_INET6, SOCK_STREAM, gaierror
 
         if family not in (AF_INET, AF_INET6):
             raise ValueError("Invalid address family: %s" % family)
 
         self.logger.info("Resolving %s address %s" % (family.name, address))
 
-        address_info = getaddrinfo(address, self.port, family, SOCK_STREAM)
-        self.logger.debug("Resolved %s address %s to %s" % (AF_INET, address, address_info))
+        try:
+            address_info = getaddrinfo(address, self.port, family, SOCK_STREAM)
+            self.logger.debug("Resolved %s address %s to %s" % (AF_INET, address, address_info))
+        except gaierror as e:
+            self.logger.error("Failed to resolve %s address %s: %s" % (family.name, address, e))
+            return
 
         for address_data in address_info:
             if family == AF_INET6:
@@ -212,24 +210,22 @@ class BaseStamp:
             else:
                 raise ValueError("Invalid address family: %s" % family)
 
-    @threaded
     def resolve_address(self, address):
         """
         Resolve the address to an IP address.
         """
-        from socket import AF_INET, AF_INET6, gaierror
+        from socket import AF_INET, AF_INET6
 
         if self.ip_settings['ipv4_servers']:
-            try:
-                self._resolve_address(address, AF_INET)
-            except gaierror as e:
-                self.logger.warning("Could not resolve IPv4 address for '%s': %s", address, e)
+            self._resolve_address(address, AF_INET)
 
         if self.ip_settings['ipv6_servers']:
-            try:
-                self._resolve_address(address, AF_INET6)
-            except gaierror as e:
-                self.logger.warning("Could not resolve IPv6 address for '%s': %s", address, e)
+            self._resolve_address(address, AF_INET6)
+
+        for thread, exception in self._threads:
+            while not exception.empty():
+                e = exception.get()
+                self.logger.error("Exception occured while resolving address '%s': %s" % (address, e))
 
     def parse_address(self):
         """
@@ -353,10 +349,14 @@ class BaseStamp:
 
         for parameter in parameters:
             if hasattr(self, parameter):
-                if isinstance(getattr(self, parameter), set):
+                if isinstance(getattr(self, parameter), set) or isinstance(getattr(self, parameter), list):
+                    if len(getattr(self, parameter)) == 0:
+                        self.logger.debug("Skipping empty parameter: %s", parameter)
+                        continue
                     out_str += "  %s: %s\n" % (parameter, ', '.join([str(item) for item in getattr(self, parameter)]))
                 else:
                     out_str += "  %s: %s\n" % (parameter, getattr(self, parameter))
+            self.logger.debug("Parameter %s not found", parameter)
 
         return out_str
 
