@@ -157,7 +157,6 @@ class Processor:
         if not self.snatcher.sources:
             raise ValueError('No sources in snatcher')
 
-        from ipaddress import IPv4Address, IPv6Address
         source_ips = set()
         ipv4_ips = set()
         ipv6_ips = set()
@@ -166,16 +165,9 @@ class Processor:
             source_ips.add(source['source_ip'])
 
         for stamp in self.iterate_stamps():
-            if not isinstance(stamp.address, set):
-                raise TypeError(f'Address is not a set: {stamp.address}')
-            for address in stamp.address:
-                if isinstance(address, IPv4Address):
-                    ipv4_ips.add(address)
-                elif isinstance(address, IPv6Address):
-                    ipv6_ips.add(address)
-                else:
-                    self.logger.error("Unknown address type for address: %s", address)
-                    raise TypeError(f'Unknown address type: {type(address)}')
+            ipv4_ips |= stamp.ipv4_servers
+            ipv6_ips |= stamp.ipv6_servers
+
         return source_ips, ipv4_ips, ipv6_ips
 
     def _get_all_ports(self):

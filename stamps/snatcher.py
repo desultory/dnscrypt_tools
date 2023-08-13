@@ -1,7 +1,7 @@
-__version__ = '0.1.5'
+__version__ = '0.1.8'
 
 from zen_custom import loggify, threaded
-from stamps.base import BaseStamp
+from stamps.base import BaseStamp, ResolutionError, DisabledStampType
 
 
 @loggify
@@ -11,6 +11,7 @@ class Snatcher:
     """
 
     ip_settings = ['ipv4_servers', 'ipv6_servers', 'block_ipv6']
+    source_settings = ['dnscrypt_servers', 'doh_servers', 'odoh_servers']
 
     def __init__(self, dnscrypt_config='dnscrypt-proxy.toml', source_dir='resolver_sources', *args, **kwargs):
         self.dnscrypt_config_file = dnscrypt_config
@@ -29,7 +30,7 @@ class Snatcher:
         self.logger.info("Loaded config file: %s", self.dnscrypt_config_file)
 
         ip_settings = {}
-
+        # Parse ip settings
         for field in self.ip_settings:
             ip_settings[field] = self.config[field]
 
@@ -38,6 +39,13 @@ class Snatcher:
             raise ValueError("All IP versions are disabled in the config file")
 
         self.ip_settings = ip_settings
+
+        source_settings = {}
+        # Parse source settings
+        for field in self.source_settings:
+            source_settings[field] = self.config[field]
+
+        self.source_settings = source_settings
 
     @threaded
     def get_source(self, url, fresh=False):
@@ -57,9 +65,8 @@ class Snatcher:
             self.logger.info("Fetching source: %s", url)
             response = request.urlopen(url)
             source_ip = response.fp.raw._sock.getpeername()[0]
-            self.logger.warning("Source IP: %s", source_ip)
         except URLError as e:
-            self.logger.error("Failed to fetch source: %s", e.reason)
+            self.logger.error("Failed to fetch source '%s': %s" % (url, e.reason))
             return
 
         raw_content = response.read().decode('utf-8').splitlines()
@@ -95,15 +102,15 @@ class Snatcher:
             for line in data['content']:
                 if line.startswith('sdns://'):
                     try:
-                        stamp = BaseStamp(line, _log_init=False, logger=self.logger, ip_settings=self.ip_settings)
-                    except Exception as e:
-                        self.logger.error("Failed to process stamp, exception '%s', line: %s" % (e, line))
+                        stamp = BaseStamp(line, source_settings=self.source_settings, _log_init=False, logger=self.logger, ip_settings=self.ip_settings)
+                    except DisabledStampType as e:
+                        self.logger.info("Skipping stamp, disabled stamp type: %s", e)
                         continue
                     self.logger.info("Found stamp:\n%s", stamp)
                     self.sources[source]['stamps'].append(stamp)
         for thread, exception in BaseStamp._threads:
             while not exception.empty():
                 e = exception.get()
-                self.logger.exception("Exception occured while processing stamps: %s", e)
+                self.logger.error("Exception occured while processing stamps: %s", e)
             thread.join()
 

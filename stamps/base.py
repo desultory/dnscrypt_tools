@@ -1,24 +1,25 @@
-__version___ = "0.1.4"
+__version___ = "0.1.7"
 
 from zen_custom import loggify, threaded
 from enum import Enum
 
 
 DEFAULT_IP_SETTINGS = {'ipv4_servers': True, 'ipv6_servers': True, 'block_ipv6': False}
+DEFAULT_SOURCE_SETTINGS = {'dnscrypt_servers': True, 'doh_servers': True, 'odoh_servers': True}
 
 
 class DNSCryptStampType(Enum):
     """
     DNSCrypt stamp type
     """
-    Plain = 0x00
-    DNSCrypt = 0x01
-    DNSOverHTTPS = 0x02
-    DNSOverTLS = 0x03
-    DNSOverQUIC = 0x04
-    ObliviousDOH = 0x05
-    AnonymizedDNSCrypt = 0x81
-    ObliviousDOHR = 0x85
+    Plain = (0x00, "plain")
+    DNSCrypt = (0x01, "dnscrypt_servers")
+    DNSOverHTTPS = (0x02, "doh_servers")
+    DNSOverTLS = (0x03, "dot_servers")
+    DNSOverQUIC = (0x04, "doq_servers")
+    ObliviousDOH = (0x05, "odoh_servers")
+    AnonymizedDNSCrypt = (0x81, "anonymized_dns_servers")
+    ObliviousDOHR = (0x85, "odohr_servers")
 
 
 class DNSCryptStampOption(Enum):
@@ -28,6 +29,20 @@ class DNSCryptStampOption(Enum):
     DNSSEC = 0x01
     NOLOGS = 0x02
     NOFILTER = 0x04
+
+
+class DisabledStampType(Exception):
+    """
+    Exception for when a stamp type is disabled
+    """
+    pass
+
+
+class ResolutionError(Exception):
+    """
+    Exception for when a stamp cannot be resolved
+    """
+    pass
 
 
 @loggify
@@ -47,11 +62,11 @@ class BaseStamp:
     has_props = True
     default_port = 443
 
-    base_parameters = ['address', 'port']
+    base_parameters = ['ipv4_servers', 'ipv6_servers', 'port']
     additional_parameters = []
     _threads = []  # Tracks threads in @threaded methods, make it a class variable
 
-    def __new__(cls, sdns=None, *args, **kwargs):
+    def __new__(cls, sdns=None, source_settings=DEFAULT_SOURCE_SETTINGS, *args, **kwargs):
         """
         Return a stamp object based on the sdns field
         Determine the type and options, return a specialed stamp object
@@ -62,7 +77,13 @@ class BaseStamp:
 
         decoded_data = cls.decode_stamp(sdns)
         stamp_type = cls.determine_stamp_type(decoded_data)
-        return super().__new__(getattr(import_module(f"stamps.{stamp_type.lower()}"), stamp_type))
+        try:
+            if not source_settings[stamp_type.value[1]]:
+                raise DisabledStampType("Stamp type %s is disabled" % stamp_type)
+        except KeyError:
+            pass  # Allow if if the stamp type is not in the source settings
+
+        return super().__new__(getattr(import_module(f"stamps.{stamp_type.name.lower()}"), stamp_type.name))
 
     def __init__(self, sdns=None, resolve=True, ip_settings=DEFAULT_IP_SETTINGS, *args, **kwargs):
         self.resolve = resolve
@@ -70,7 +91,8 @@ class BaseStamp:
         for option in DNSCryptStampOption:
             setattr(self, option.name.lower(), kwargs.get(option.name.lower(), False))  # Set the option attributes, defaulting to False
 
-        self.address = set()  # Make a set, dns entries can have multiple addresses
+        self.ipv6_servers = set()
+        self.ipv4_servers = set()
 
         self.sdns = self.decode_stamp(sdns)
         if sdns:
@@ -116,8 +138,8 @@ class BaseStamp:
         header_value = stamp_data if len(stamp_data) == 1 else stamp_data[0]
 
         for stamp_type in DNSCryptStampType:
-            if stamp_type.value == header_value:
-                return stamp_type.name
+            if stamp_type.value[0] == header_value:
+                return stamp_type
         raise ValueError("Invalid stamp type: %s" % header_value)
 
     def _parse_ipv6_address(self, address):
@@ -136,7 +158,7 @@ class BaseStamp:
             self.port = self.default_port
 
         try:
-            self.address.add(IPv6Address(address))
+            self.ipv6_servers.add(IPv6Address(address))
         except AddressValueError:
             raise ValueError("Invalid IPv6 address: %s" % address)
 
@@ -161,46 +183,53 @@ class BaseStamp:
                 self.port = self.default_port
 
         try:
-            self.address.add(IPv4Address(address))
+            self.ipv4_servers.add(IPv4Address(address))
         except AddressValueError:
             if self.resolve:
                 self.resolve_address(address)
             else:
                 raise ValueError("Invalid IPv4 address: %s" % address)
 
+    def _resolve_address(self, address, family):
+        """
+        Resolve an IP address
+        """
+        from socket import getaddrinfo, AF_INET, AF_INET6, SOCK_STREAM
+
+        if family not in (AF_INET, AF_INET6):
+            raise ValueError("Invalid address family: %s" % family)
+
+        self.logger.info("Resolving %s address %s" % (family.name, address))
+
+        address_info = getaddrinfo(address, self.port, family, SOCK_STREAM)
+        self.logger.debug("Resolved %s address %s to %s" % (AF_INET, address, address_info))
+
+        for address_data in address_info:
+            if family == AF_INET6:
+                self.ipv6_servers.add(address_data[4][0])
+            elif family == AF_INET:
+                self.ipv4_servers.add(address_data[4][0])
+            else:
+                raise ValueError("Invalid address family: %s" % family)
+
     @threaded
     def resolve_address(self, address):
         """
-        Resolve the address to an IP address
+        Resolve the address to an IP address.
         """
-        from socket import getaddrinfo, AF_INET, AF_INET6, SOCK_STREAM, gaierror
+        from socket import AF_INET, AF_INET6, gaierror
+
+        if self.ip_settings['ipv4_servers']:
+            try:
+                self._resolve_address(address, AF_INET)
+            except gaierror as e:
+                self.logger.warning("Could not resolve IPv4 address for '%s': %s", address, e)
 
         if self.ip_settings['ipv6_servers']:
-            addr_family = AF_INET6
-        elif self.ip_settings['ipv4_servers']:
-            addr_family = AF_INET
-        else:
-            raise ValueError("No IP versions are enabled")
-
-        self.logger.info("Resolving address %s", address)
-        try:
-            address_info = getaddrinfo(address, self.port, addr_family, SOCK_STREAM)
-            self.logger.debug("Resolved address %s to %s", address, address_info)
-        except gaierror as e:
-            if addr_family == AF_INET6 and self.ip_settings['ipv4_servers']:
-                self.logger.warning("Could not resolve IPv6 address %s: %s", address, e)
-                address_info = getaddrinfo(address, self.port, AF_INET, SOCK_STREAM)
-            else:
-                raise ValueError("Could not resolve IPv4 address %s: %s" % (address, e))
-
-        for address in address_info:
-            self.logger.debug("Processing resolved address %s", address)
-            if self.ip_settings['ipv6_servers'] and address[0] == AF_INET6:
-                self._parse_ipv6_address(f"[{address[4][0]}]")  # Wrap the address in []
-            elif self.ip_settings['ipv4_servers'] and address[0] == AF_INET:
-                self._parse_ipv4_address(address[4][0])
-            else:
-                raise ValueError("Address does not match the enabled IP versions: %s" % address[4][0])
+            try:
+                self._resolve_address(address, AF_INET6)
+            except gaierror as e:
+                self.logger.warning("Could not resolve IPv6 address for '%s': %s", address, e)
 
     def parse_address(self):
         """
@@ -209,7 +238,8 @@ class BaseStamp:
         if not self.ip_settings['ipv4_servers'] and not self.ip_settings['ipv6_servers']:
             raise ValueError("No IP versions are enabled")
 
-        address = self.consume_lp()
+        address = self.consume_lp()  # Consume the length-value pair
+        # First try to parse the address as an IPv6 address
         if address.startswith('[') and ']' in address:
             if self.ip_settings['block_ipv6']:
                 raise ValueError("IPv6 servers are blocked")
@@ -218,6 +248,7 @@ class BaseStamp:
             else:
                 self.logger.warning("IPv6 servers are disabled, but IPv6 address %s was found", address)
                 raise ValueError("IPv6 servers are disabled")
+        # Then try to parse the address as an IPv4 address, where it will try to resolve the address if it is not valid
         else:
             self._parse_ipv4_address(address)
 
