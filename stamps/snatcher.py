@@ -1,4 +1,4 @@
-__version__ = '0.2.1'
+__version__ = '0.2.2'
 
 from zen_custom import loggify, threaded
 from stamps.base import BaseStamp, DisabledStampType, BrokenStampError
@@ -12,6 +12,7 @@ class Snatcher:
 
     ip_settings = ['ipv4_servers', 'ipv6_servers', 'block_ipv6']
     source_settings = ['dnscrypt_servers', 'doh_servers', 'odoh_servers']
+    require_options = ['require_dnssec', 'require_nolog', 'require_nofilter']
 
     def __init__(self, dnscrypt_config='dnscrypt-proxy.toml', source_dir='resolver_sources', *args, **kwargs):
         self.dnscrypt_config_file = dnscrypt_config
@@ -32,7 +33,7 @@ class Snatcher:
         ip_settings = {}
         # Parse ip settings
         for field in self.ip_settings:
-            ip_settings[field] = self.config[field]
+            ip_settings[field] = self.config.get(field, True)
 
         if not ip_settings['ipv4_servers'] and not ip_settings['ipv6_servers']:
             self.logger.error("Either IPv4 or IPv6 servers must be enabled in the config file")
@@ -46,6 +47,13 @@ class Snatcher:
             source_settings[field] = self.config[field]
 
         self.source_settings = source_settings
+
+        require_options = {}
+        # Parse require options
+        for field in self.require_options:
+            require_options[field] = self.config.get(field, False)
+
+        self.require_options = require_options
 
     @threaded
     def get_source(self, url, fresh=False):
@@ -103,7 +111,7 @@ class Snatcher:
             for line in data['content']:
                 if line.startswith('sdns://'):
                     try:
-                        stamp = BaseStamp(line, source_settings=self.source_settings, _log_init=False, logger=self.logger, ip_settings=self.ip_settings)
+                        stamp = BaseStamp(line, source_settings=self.source_settings, require_options=self.require_options, _log_init=False, logger=self.logger, ip_settings=self.ip_settings)
                     except DisabledStampType as e:
                         self.logger.info("Skipping stamp, disabled stamp type: %s", e)
                         continue

@@ -1,4 +1,4 @@
-__version___ = "0.2.2"
+__version___ = "0.2.3"
 
 from zen_custom import loggify, threaded
 from enum import Enum
@@ -6,6 +6,7 @@ from enum import Enum
 
 DEFAULT_IP_SETTINGS = {'ipv4_servers': True, 'ipv6_servers': True, 'block_ipv6': False}
 DEFAULT_SOURCE_SETTINGS = {'dnscrypt_servers': True, 'doh_servers': True, 'odoh_servers': True}
+DEFAULT_REQUIRE_OPTIONS = {'require_dnssec': False, 'require_nologs': False, 'require_nofilter': False}
 
 
 class DNSCryptStampType(Enum):
@@ -27,7 +28,7 @@ class DNSCryptStampOption(Enum):
     DNSCrypt stamp option, with the value of the bit in the options field
     """
     DNSSEC = 0x01
-    NOLOGS = 0x02
+    NOLOG = 0x02
     NOFILTER = 0x04
 
 
@@ -85,9 +86,10 @@ class BaseStamp:
 
         return super().__new__(getattr(import_module(f"stamps.{stamp_type.name.lower()}"), stamp_type.name))
 
-    def __init__(self, sdns=None, resolve=True, ip_settings=DEFAULT_IP_SETTINGS, *args, **kwargs):
+    def __init__(self, sdns=None, resolve=True, ip_settings=DEFAULT_IP_SETTINGS, require_options=DEFAULT_REQUIRE_OPTIONS, *args, **kwargs):
         self.resolve = resolve
         self.ip_settings = ip_settings
+        self.require_options = require_options
         for option in DNSCryptStampOption:
             setattr(self, option.name.lower(), kwargs.get(option.name.lower(), False))  # Set the option attributes, defaulting to False
 
@@ -267,6 +269,18 @@ class BaseStamp:
         for option in DNSCryptStampOption:
             if options & option.value:
                 setattr(self, option.name.lower(), True)  # Set the option attributes
+
+        self.check_options()
+
+    def check_options(self):
+        """
+        Checks if the set options are valid
+        """
+        for name, option in self.require_options.items():
+            self.logger.debug("Checking if required option '%s' is set to: %s" % (name.removeprefix('require_'), option))
+            if option and not getattr(self, name.removeprefix('require_')):
+                raise DisabledStampType("Required option not found: %s" % name)
+        self.logger.debug("All required options are present: %s", self.require_options)
 
     def parse_sdns(self):
         """
